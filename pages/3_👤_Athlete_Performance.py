@@ -27,37 +27,14 @@ coaches_df = data['coaches'].copy()
 # Add continent info
 athletes_df = add_continent_column(athletes_df, 'country_code')
 
-# --- Country filter ---
-if filters.get('countries'):
+# Apply filters
+if filters['countries']:
     athletes_df = athletes_df[athletes_df['country_code'].isin(filters['countries'])]
     medals_df = medals_df[medals_df['country_code'].isin(filters['countries'])]
 
-# --- Sport filter ---
-sport_col = 'discipline'  # correct column name
-if filters.get('sports'):
+if filters['sports']:
     athletes_df = athletes_df[athletes_df['disciplines'].str.contains('|'.join(filters['sports']), na=False)]
-    medals_df = medals_df[medals_df[sport_col].str.contains('|'.join(filters['sports']), na=False)]
 
-# Map W/M → Female/Male BEFORE filtering
-gender_map = {'M': 'Male', 'W': 'Female'}
-athletes_df['gender'] = athletes_df['gender'].map(gender_map)
-medals_df['gender'] = medals_df['gender'].map(gender_map)
-
-# Apply gender filter
-if filters.get('genders'):
-    athletes_df = athletes_df[athletes_df['gender'].isin(filters['genders'])]
-    medals_df   = medals_df[medals_df['gender'].isin(filters['genders'])]
-
-# --- Continent filter ---
-if filters.get('continents'):
-    if 'continent' not in athletes_df.columns:
-        athletes_df = add_continent_column(athletes_df, 'country_code')
-    if 'continent' not in medals_df.columns:
-        medals_df = add_continent_column(medals_df, 'country_code')
-    
-    athletes_df = athletes_df[athletes_df['continent'].isin(filters['continents'])]
-    medals_df = medals_df[medals_df['continent'].isin(filters['continents'])]
-    
 # ============= ATHLETE PROFILE CARD =============
 st.header("🔍 Detailed Athlete Profile")
 
@@ -108,13 +85,13 @@ if selected_athlete:
         col_a, col_b, col_c = st.columns(3)
         with col_a:
             height = athlete_info.get('height', 'N/A')
-            st.metric("Height", f"{height} cm" if pd.notna(height) and height!=0 else "N/A")
+            st.metric("Height", f"{height} cm" if pd.notna(height) else "N/A")
         with col_b:
             weight = athlete_info.get('weight', 'N/A')
-            st.metric("Weight", f"{weight} kg" if pd.notna(weight) and weight!=0 else "N/A")
+            st.metric("Weight", f"{weight} kg" if pd.notna(weight) else "N/A")
         with col_c:
             gender = athlete_info.get('gender', 'N/A')
-            st.metric("Gender", f"{gender} cm" if pd.notna(gender) else "N/A")
+            st.metric("Gender", gender)
         
         # Sports & Disciplines
         disciplines = athlete_info.get('disciplines', 'N/A')
@@ -124,8 +101,6 @@ if selected_athlete:
         coach = athlete_info.get('coach', 'N/A')
         if pd.notna(coach) and coach != 'N/A':
             st.markdown(f"**Coach:** {coach}")
-        else:
-            st.markdown(f"**Coach:** N/A")
         
         # Find athlete code
         athlete_code = athlete_info.get('code', '')
@@ -149,54 +124,101 @@ st.markdown("---")
 st.header("📊 Age Distribution Analysis")
 
 # Calculate age (birth_date is in the dataset)
-# For this example, we'll use a simple age distribution if age column exists
 if 'birth_date' in athletes_df.columns:
     athletes_df['birth_date'] = pd.to_datetime(athletes_df['birth_date'], errors='coerce')
     athletes_df['age'] = 2024 - athletes_df['birth_date'].dt.year
+    
+    # Remove invalid ages (negative or unrealistic)
+    athletes_df = athletes_df[(athletes_df['age'] > 10) & (athletes_df['age'] < 100)]
 
 # Create age distribution by sport or gender
-viz_choice = st.radio("View age distribution by:", ["Sport", "Gender"], horizontal=True)
+if 'age' in athletes_df.columns and not athletes_df['age'].isna().all():
+    viz_choice = st.radio("View age distribution by:", ["Sport", "Gender"], horizontal=True)
 
-if viz_choice == "Sport" and 'age' in athletes_df.columns:
-    # Get top 10 sports by participant count
-    top_sports = athletes_df['disciplines'].value_counts().head(10).index
-    athletes_sport = athletes_df[athletes_df['disciplines'].isin(top_sports)]
-    
-    fig_age = px.box(
-        athletes_sport,
-        x='disciplines',
-        y='age',
-        color='disciplines',
-        title='Age Distribution by Sport (Top 10 Sports)',
-        labels={'disciplines': 'Sport', 'age': 'Age (years)'},
-        points='outliers'
-    )
-    
-    fig_age.update_layout(
-        xaxis_tickangle=-45,
-        showlegend=False,
-        height=500
-    )
-    
-elif 'age' in athletes_df.columns:
-    fig_age = px.violin(
-        athletes_df,
-        x='gender',
-        y='age',
-        color='gender',
-        box=True,
-        title='Age Distribution by Gender',
-        labels={'gender': 'Gender', 'age': 'Age (years)'}
-    )
-    
-    fig_age.update_layout(height=500)
+    if viz_choice == "Sport":
+        # Parse disciplines column safely (it's a string representation of a list)
+        def parse_discipline(disc_str):
+            """Safely parse discipline string to extract first sport"""
+            if pd.isna(disc_str):
+                return None
+            if isinstance(disc_str, str):
+                # Remove brackets and quotes, split by comma, take first
+                clean = disc_str.strip("[]'\"")
+                if ',' in clean:
+                    return clean.split(',')[0].strip("'\"")
+                return clean.strip("'\"")
+            return str(disc_str)
+        
+        athletes_df['disciplines_parsed'] = athletes_df['disciplines'].apply(parse_discipline)
+        
+        # Get top 10 sports by participant count
+        top_sports = athletes_df['disciplines_parsed'].value_counts().head(10).index.tolist()
+        athletes_sport = athletes_df[athletes_df['disciplines_parsed'].isin(top_sports)].copy()
+        
+        if len(athletes_sport) > 0:
+            fig_age = px.box(
+                athletes_sport,
+                x='disciplines_parsed',
+                y='age',
+                color='disciplines_parsed',
+                title='Age Distribution by Sport (Top 10 Sports)',
+                labels={'disciplines_parsed': 'Sport', 'age': 'Age (years)'},
+                points='outliers'
+            )
+            
+            fig_age.update_layout(
+                xaxis_tickangle=-45,
+                showlegend=False,
+                height=500,
+                xaxis_title='Sport',
+                yaxis_title='Age (years)'
+            )
+            
+            st.plotly_chart(fig_age, use_container_width=True)
+        else:
+            st.warning("No sport data available with current filters")
+        
+    else:  # Gender
+        if 'gender' in athletes_df.columns:
+            athletes_gender = athletes_df.dropna(subset=['age', 'gender'])
+            
+            if len(athletes_gender) > 0:
+                fig_age = px.violin(
+                    athletes_gender,
+                    x='gender',
+                    y='age',
+                    color='gender',
+                    box=True,
+                    title='Age Distribution by Gender',
+                    labels={'gender': 'Gender', 'age': 'Age (years)'},
+                    color_discrete_map={'Male': '#3B82F6', 'Female': '#EC4899'}
+                )
+                
+                fig_age.update_layout(
+                    height=500,
+                    showlegend=True
+                )
+                
+                st.plotly_chart(fig_age, use_container_width=True)
+                
+                # Show statistics
+                col_stats1, col_stats2 = st.columns(2)
+                
+                with col_stats1:
+                    male_avg = athletes_gender[athletes_gender['gender'] == 'Male']['age'].mean()
+                    st.metric("Average Age (Male)", f"{male_avg:.1f} years")
+                
+                with col_stats2:
+                    female_avg = athletes_gender[athletes_gender['gender'] == 'Female']['age'].mean()
+                    st.metric("Average Age (Female)", f"{female_avg:.1f} years")
+            else:
+                st.warning("No gender/age data available")
+        else:
+            st.warning("Gender column not found")
 
 else:
-    st.warning("Age data not available in the dataset")
-    fig_age = None
-
-if fig_age:
-    st.plotly_chart(fig_age, use_container_width=True)
+    st.warning("Age data not available in the dataset. Birth dates may be missing.")
+    st.info("💡 The athletes.csv file needs valid birth_date values to calculate ages.")
 
 st.markdown("---")
 
@@ -249,29 +271,13 @@ st.markdown("---")
 st.header("🏆 Top 10 Athletes by Medal Count")
 
 # Count medals per athlete
-# Make sure the continent column exists
-medals_df = add_continent_column(medals_df, country_col='country_code')
-
-# Count medals per athlete, including gender, sport, and continent
 athlete_medal_counts = medals_df.groupby('name').agg({
     'medal_type': 'count',
     'country': 'first',
-    'country_code': 'first',
-    'gender': 'first',
-    'discipline': 'first',  # this is the sport
-    'continent': 'first'
+    'country_code': 'first'
 }).reset_index()
 
-# Rename columns for clarity
-athlete_medal_counts.columns = [
-    'Athlete', 'Total Medals', 'Country', 'Country Code', 'Gender', 'Sport', 'Continent'
-]
-
-gender_map = {'M': 'Male', 'W': 'Female'}
-
-athlete_medal_counts['Gender'] = athlete_medal_counts['Gender'].map(gender_map).fillna(athlete_medal_counts['Gender'])
-
-# Sort top 10
+athlete_medal_counts.columns = ['Athlete', 'Total Medals', 'Country', 'Country Code']
 athlete_medal_counts = athlete_medal_counts.sort_values('Total Medals', ascending=False).head(10)
 
 # Create bar chart
