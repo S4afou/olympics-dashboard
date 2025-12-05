@@ -1,6 +1,5 @@
 # 🏅 Paris 2024 Olympics Dashboard
 
-**LA28 Volunteer Selection Challenge Submission**
 
 An interactive, multi-page Streamlit dashboard providing comprehensive analysis of the Paris 2024 Olympic Games dataset.
 
@@ -27,7 +26,7 @@ This dashboard transforms raw Olympic data into compelling, interactive narrativ
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/S4afou/olympics-dashboard
    cd olympic-dashboard
    ```
 
