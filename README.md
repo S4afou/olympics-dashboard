@@ -181,4 +181,3 @@ This project is created for educational purposes as part of the Software Enginee
 - Dr. Belkacem KHALDI for project guidance
 - Paris 2024 Olympic Games dataset by piterfm on Kaggle
 - Streamlit community for excellent documentation
-- LA28 organizing committee for the inspiration
