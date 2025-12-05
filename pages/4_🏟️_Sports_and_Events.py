@@ -435,4 +435,64 @@ fig_compare = px.bar(
     labels={'count':'Number of Medals', 'medal_type':'Medal Type', 'country_code':'Country'}
 )
 st.plotly_chart(fig_compare, use_container_width=True)
+
+# ================= TASK 5: WHO WON THE DAY =================
+st.header(" Who Won the Day? — Medals & Events Timeline")
+
+# Convert date columns to datetime.date
+medals_df['medal_date'] = pd.to_datetime(medals_df['medal_date']).dt.date
+schedules_df['start_date'] = pd.to_datetime(schedules_df['start_date']).dt.date
+
+# Games period
+min_date = min(schedules_df['start_date'].min(), medals_df['medal_date'].min())
+max_date = max(schedules_df['start_date'].max(), medals_df['medal_date'].max())
+
+# Day selector
+selected_date = st.slider(
+    "Select a Day of the Games:",
+    min_value=min_date,
+    max_value=max_date,
+    value=min_date,
+    format="YYYY-MM-DD"
+)
+
+# --- Medals ---
+medals_today = medals_df[medals_df['medal_date'] == selected_date]
+
+if medals_today.empty:
+    st.info(f"No medals awarded on {selected_date}.")
+else:
+    summary = medals_today.groupby(['country_code', 'medal_type']).size().reset_index(name='count')
+    fig_medals = px.bar(
+        summary,
+        x='country_code',
+        y='count',
+        color='medal_type',
+        text='count',
+        labels={'count': 'Number of Medals', 'country_code': 'Country', 'medal_type': 'Medal Type'},
+        title=f"Medals Awarded on {selected_date}",
+        barmode='stack'
+    )
+    fig_medals.update_traces(textposition='outside')
+    fig_medals.update_layout(height=500, margin=dict(t=50, b=50))
+    st.plotly_chart(fig_medals, use_container_width=True)
+
+# --- Events ---
+events_today = schedules_df[schedules_df['start_date'] == selected_date]
+
+if events_today.empty:
+    st.info(f"No events scheduled on {selected_date}.")
+else:
+    st.subheader(f"Events on {selected_date}")
+    display_events = events_today[['discipline', 'event', 'venue', 'start_date', 'end_date', 'phase', 'gender']].copy()
+    display_events = display_events.rename(columns={
+        'discipline': 'Sport',
+        'event': 'Event',
+        'venue': 'Venue',
+        'start_date': 'Start Date',
+        'end_date': 'End Date',
+        'phase': 'Phase',
+        'gender': 'Gender'
+    })
+    st.dataframe(display_events, use_container_width=True)
 st.caption("💡 Use the sidebar filters to explore specific sports and countries. Click on map markers for venue details!")

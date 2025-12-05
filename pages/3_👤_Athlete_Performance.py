@@ -27,14 +27,37 @@ coaches_df = data['coaches'].copy()
 # Add continent info
 athletes_df = add_continent_column(athletes_df, 'country_code')
 
-# Apply filters
-if filters['countries']:
+# Map W/M → Female/Male for display (create separate column)
+gender_map = {'M': 'Male', 'W': 'Female'}
+athletes_df['gender_display'] = athletes_df['gender'].map(gender_map).fillna(athletes_df['gender'])
+medals_df['gender_display'] = medals_df['gender'].map(gender_map).fillna(medals_df['gender'])
+
+# --- Country filter ---
+if filters.get('countries'):
     athletes_df = athletes_df[athletes_df['country_code'].isin(filters['countries'])]
     medals_df = medals_df[medals_df['country_code'].isin(filters['countries'])]
 
-if filters['sports']:
+# --- Sport filter ---
+sport_col = 'discipline'  # correct column name
+if filters.get('sports'):
     athletes_df = athletes_df[athletes_df['disciplines'].str.contains('|'.join(filters['sports']), na=False)]
+    medals_df = medals_df[medals_df[sport_col].str.contains('|'.join(filters['sports']), na=False)]
 
+# Apply gender filter (filter returns 'Male'/'Female', filter on gender_display)
+if filters.get('genders'):
+    athletes_df = athletes_df[athletes_df['gender_display'].isin(filters['genders'])]
+    medals_df = medals_df[medals_df['gender_display'].isin(filters['genders'])]
+
+# --- Continent filter ---
+if filters.get('continents'):
+    if 'continent' not in athletes_df.columns:
+        athletes_df = add_continent_column(athletes_df, 'country_code')
+    if 'continent' not in medals_df.columns:
+        medals_df = add_continent_column(medals_df, 'country_code')
+    
+    athletes_df = athletes_df[athletes_df['continent'].isin(filters['continents'])]
+    medals_df = medals_df[medals_df['continent'].isin(filters['continents'])]
+    
 # ============= ATHLETE PROFILE CARD =============
 st.header("🔍 Detailed Athlete Profile")
 
@@ -85,13 +108,13 @@ if selected_athlete:
         col_a, col_b, col_c = st.columns(3)
         with col_a:
             height = athlete_info.get('height', 'N/A')
-            st.metric("Height", f"{height} cm" if pd.notna(height) else "N/A")
+            st.metric("Height", f"{height} cm" if pd.notna(height) and height!=0 else "N/A")
         with col_b:
             weight = athlete_info.get('weight', 'N/A')
-            st.metric("Weight", f"{weight} kg" if pd.notna(weight) else "N/A")
+            st.metric("Weight", f"{weight} kg" if pd.notna(weight) and weight!=0 else "N/A")
         with col_c:
-            gender = athlete_info.get('gender', 'N/A')
-            st.metric("Gender", gender)
+            gender_display = athlete_info.get('gender_display', 'N/A')
+            st.metric("Gender", gender_display if pd.notna(gender_display) else "N/A")
         
         # Sports & Disciplines
         disciplines = athlete_info.get('disciplines', 'N/A')
@@ -101,6 +124,8 @@ if selected_athlete:
         coach = athlete_info.get('coach', 'N/A')
         if pd.notna(coach) and coach != 'N/A':
             st.markdown(f"**Coach:** {coach}")
+        else:
+            st.markdown(f"**Coach:** N/A")
         
         # Find athlete code
         athlete_code = athlete_info.get('code', '')
@@ -145,8 +170,8 @@ if 'age' in athletes_df.columns and not athletes_df['age'].isna().all():
                 # Remove brackets and quotes, split by comma, take first
                 clean = disc_str.strip("[]'\"")
                 if ',' in clean:
-                    return clean.split(',')[0].strip("'\"")
-                return clean.strip("'\"")
+                    return clean.split(',')[0].strip("'\" ")
+                return clean.strip("'\" ")
             return str(disc_str)
         
         athletes_df['disciplines_parsed'] = athletes_df['disciplines'].apply(parse_discipline)
@@ -179,24 +204,26 @@ if 'age' in athletes_df.columns and not athletes_df['age'].isna().all():
             st.warning("No sport data available with current filters")
         
     else:  # Gender
-        if 'gender' in athletes_df.columns:
-            athletes_gender = athletes_df.dropna(subset=['age', 'gender'])
+        if 'gender_display' in athletes_df.columns:
+            athletes_gender = athletes_df.dropna(subset=['age', 'gender_display'])
             
             if len(athletes_gender) > 0:
                 fig_age = px.violin(
                     athletes_gender,
-                    x='gender',
+                    x='gender_display',
                     y='age',
-                    color='gender',
+                    color='gender_display',
                     box=True,
                     title='Age Distribution by Gender',
-                    labels={'gender': 'Gender', 'age': 'Age (years)'},
+                    labels={'gender_display': 'Gender', 'age': 'Age (years)'},
                     color_discrete_map={'Male': '#3B82F6', 'Female': '#EC4899'}
                 )
                 
                 fig_age.update_layout(
                     height=500,
-                    showlegend=True
+                    showlegend=True,
+                    xaxis_title='Gender',
+                    yaxis_title='Age (years)'
                 )
                 
                 st.plotly_chart(fig_age, use_container_width=True)
@@ -205,12 +232,20 @@ if 'age' in athletes_df.columns and not athletes_df['age'].isna().all():
                 col_stats1, col_stats2 = st.columns(2)
                 
                 with col_stats1:
-                    male_avg = athletes_gender[athletes_gender['gender'] == 'Male']['age'].mean()
-                    st.metric("Average Age (Male)", f"{male_avg:.1f} years")
+                    male_data = athletes_gender[athletes_gender['gender_display'] == 'Male']['age']
+                    if len(male_data) > 0:
+                        male_avg = male_data.mean()
+                        st.metric("Average Age (Male)", f"{male_avg:.1f} years")
+                    else:
+                        st.metric("Average Age (Male)", "N/A")
                 
                 with col_stats2:
-                    female_avg = athletes_gender[athletes_gender['gender'] == 'Female']['age'].mean()
-                    st.metric("Average Age (Female)", f"{female_avg:.1f} years")
+                    female_data = athletes_gender[athletes_gender['gender_display'] == 'Female']['age']
+                    if len(female_data) > 0:
+                        female_avg = female_data.mean()
+                        st.metric("Average Age (Female)", f"{female_avg:.1f} years")
+                    else:
+                        st.metric("Average Age (Female)", "N/A")
             else:
                 st.warning("No gender/age data available")
         else:
@@ -228,89 +263,123 @@ st.header("⚖️ Gender Distribution Analysis")
 # Add continent/country filter for gender analysis
 geo_level = st.radio("Analyze gender distribution by:", ["World", "Continent", "Country"], horizontal=True)
 
-if geo_level == "World":
-    gender_counts = athletes_df['gender'].value_counts().reset_index()
-    gender_counts.columns = ['Gender', 'Count']
-    title = "Global Gender Distribution"
-    
-elif geo_level == "Continent":
-    selected_cont = st.selectbox("Select Continent", sorted(athletes_df['continent'].unique()))
-    continent_athletes = athletes_df[athletes_df['continent'] == selected_cont]
-    gender_counts = continent_athletes['gender'].value_counts().reset_index()
-    gender_counts.columns = ['Gender', 'Count']
-    title = f"Gender Distribution in {selected_cont}"
-    
-else:  # Country
-    selected_country = st.selectbox("Select Country", sorted(athletes_df['country_code'].unique()))
-    country_athletes = athletes_df[athletes_df['country_code'] == selected_country]
-    gender_counts = country_athletes['gender'].value_counts().reset_index()
-    gender_counts.columns = ['Gender', 'Count']
-    title = f"Gender Distribution in {selected_country}"
+# Ensure we have valid gender data
+athletes_with_gender = athletes_df[athletes_df['gender_display'].notna()].copy()
 
-# Create pie chart
-fig_gender = px.pie(
-    gender_counts,
-    names='Gender',
-    values='Count',
-    title=title,
-    color='Gender',
-    color_discrete_map={'Male': '#3B82F6', 'Female': '#EC4899'},
-    hole=0.3
-)
+if len(athletes_with_gender) == 0:
+    st.warning("No gender data available")
+else:
+    if geo_level == "World":
+        gender_counts = athletes_with_gender['gender_display'].value_counts().reset_index()
+        gender_counts.columns = ['Gender', 'Count']
+        title = "Global Gender Distribution"
+        
+    elif geo_level == "Continent":
+        continents = sorted(athletes_with_gender['continent'].dropna().unique())
+        if len(continents) > 0:
+            selected_cont = st.selectbox("Select Continent", continents)
+            continent_athletes = athletes_with_gender[athletes_with_gender['continent'] == selected_cont]
+            gender_counts = continent_athletes['gender_display'].value_counts().reset_index()
+            gender_counts.columns = ['Gender', 'Count']
+            title = f"Gender Distribution in {selected_cont}"
+        else:
+            st.warning("No continent data available")
+            gender_counts = pd.DataFrame()
+        
+    else:  # Country
+        countries = sorted(athletes_with_gender['country_code'].dropna().unique())
+        if len(countries) > 0:
+            selected_country = st.selectbox("Select Country", countries)
+            country_athletes = athletes_with_gender[athletes_with_gender['country_code'] == selected_country]
+            gender_counts = country_athletes['gender_display'].value_counts().reset_index()
+            gender_counts.columns = ['Gender', 'Count']
+            title = f"Gender Distribution in {selected_country}"
+        else:
+            st.warning("No country data available")
+            gender_counts = pd.DataFrame()
 
-fig_gender.update_traces(
-    textposition='inside',
-    textinfo='percent+label+value'
-)
+    # Create pie chart if we have data
+    if not gender_counts.empty:
+        fig_gender = px.pie(
+            gender_counts,
+            names='Gender',
+            values='Count',
+            title=title,
+            color='Gender',
+            color_discrete_map={'Male': '#3B82F6', 'Female': '#EC4899'},
+            hole=0.3
+        )
 
-st.plotly_chart(fig_gender, use_container_width=True)
+        fig_gender.update_traces(
+            textposition='inside',
+            textinfo='percent+label+value'
+        )
+
+        st.plotly_chart(fig_gender, use_container_width=True)
+    else:
+        st.warning("No data available for selected filters")
 
 st.markdown("---")
 
 # ============= TOP ATHLETES BY MEDALS =============
 st.header("🏆 Top 10 Athletes by Medal Count")
 
-# Count medals per athlete
+# Make sure the continent column exists (do this BEFORE filtering affected the data)
+if 'continent' not in medals_df.columns:
+    medals_df = add_continent_column(medals_df, country_col='country_code')
+
+# Count medals per athlete, including gender, sport, and continent
 athlete_medal_counts = medals_df.groupby('name').agg({
     'medal_type': 'count',
     'country': 'first',
-    'country_code': 'first'
+    'country_code': 'first',
+    'gender_display': 'first',
+    'discipline': 'first',  # this is the sport
+    'continent': 'first'
 }).reset_index()
 
-athlete_medal_counts.columns = ['Athlete', 'Total Medals', 'Country', 'Country Code']
+# Rename columns for clarity
+athlete_medal_counts.columns = [
+    'Athlete', 'Total Medals', 'Country', 'Country Code', 'Gender', 'Sport', 'Continent'
+]
+
+# Sort top 10
 athlete_medal_counts = athlete_medal_counts.sort_values('Total Medals', ascending=False).head(10)
 
-# Create bar chart
-fig_top_athletes = px.bar(
-    athlete_medal_counts,
-    x='Total Medals',
-    y='Athlete',
-    orientation='h',
-    text='Total Medals',
-    color='Total Medals',
-    color_continuous_scale='Plasma',
-    title='Top 10 Medal Winners',
-    hover_data=['Country']
-)
+if len(athlete_medal_counts) > 0:
+    # Create bar chart
+    fig_top_athletes = px.bar(
+        athlete_medal_counts,
+        x='Total Medals',
+        y='Athlete',
+        orientation='h',
+        text='Total Medals',
+        color='Total Medals',
+        color_continuous_scale='Plasma',
+        title='Top 10 Medal Winners',
+        hover_data=['Country', 'Gender', 'Sport']
+    )
 
-fig_top_athletes.update_traces(
-    textposition='outside'
-)
+    fig_top_athletes.update_traces(
+        textposition='outside'
+    )
 
-fig_top_athletes.update_layout(
-    yaxis={'categoryorder': 'total ascending'},
-    height=500,
-    showlegend=False
-)
+    fig_top_athletes.update_layout(
+        yaxis={'categoryorder': 'total ascending'},
+        height=500,
+        showlegend=False
+    )
 
-st.plotly_chart(fig_top_athletes, use_container_width=True)
+    st.plotly_chart(fig_top_athletes, use_container_width=True)
 
-# Display detailed table
-st.subheader("📋 Detailed Medal Breakdown")
-st.dataframe(
-    athlete_medal_counts,
-    use_container_width=True,
-    hide_index=True
-)
+    # Display detailed table
+    st.subheader("📋 Detailed Medal Breakdown")
+    st.dataframe(
+        athlete_medal_counts,
+        use_container_width=True,
+        hide_index=True
+    )
+else:
+    st.warning("No athletes found with current filters")
 
 st.caption("💡 Use the athlete search at the top to view detailed profiles of specific competitors!")
