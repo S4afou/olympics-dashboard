@@ -51,8 +51,7 @@ requirements.txt
 - Contents: athletes, coaches, events, medallists, medals, medal totals, NOCs, schedules,
   teams, technical officials, venues and per-sport results
 - Access: public, check the Kaggle terms before redistributing
-- Included here so the dashboard runs from a clone; `data/torch_route.csv` holds the torch
-  relay coordinates used on the map
+- Included here so the dashboard runs from a clone.
 
 ## Stack
 
