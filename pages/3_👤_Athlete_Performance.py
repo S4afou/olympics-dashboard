@@ -343,9 +343,16 @@ athlete_medal_counts.columns = [
     'Athlete', 'Total Medals', 'Country', 'Country Code', 'Gender', 'Sport', 'Continent'
 ]
 
+mask = athlete_medal_counts.apply(
+    lambda row: row['Country'] in row['Athlete'], axis=1
+)
+
+athlete_medal_counts = athlete_medal_counts[~mask]
+
 # Sort top 10
 athlete_medal_counts = athlete_medal_counts.sort_values('Total Medals', ascending=False).head(10)
 
+athlete_medal_counts = athlete_medal_counts[~mask]
 if len(athlete_medal_counts) > 0:
     # Create bar chart
     fig_top_athletes = px.bar(

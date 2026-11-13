@@ -68,8 +68,15 @@ medals_total_df = data['medals_total'].copy()
 # Identify the medal column name (could be 'medal_type' or 'medal')
 medal_col = 'medal_type' if 'medal_type' in medals_df.columns else 'medal'
 
-# Add continent column for filtering
+# Add continent column to ALL dataframes BEFORE filtering
 medals_total_df = add_continent_column(medals_total_df, 'country_code')
+medals_df = add_continent_column(medals_df, 'country_code')
+athletes_df = add_continent_column(athletes_df, 'country_code')
+
+# Create gender_display for visualization
+gender_map = {'M': 'Male', 'W': 'Female'}
+if 'gender' in medals_df.columns:
+    medals_df['gender_display'] = medals_df['gender'].map(gender_map).fillna(medals_df['gender'])
 
 # Apply filters
 if filters['countries']:
@@ -87,22 +94,24 @@ if filters['sports']:
     sport_col = 'discipline' if 'discipline' in medals_df.columns else 'sport'
     if sport_col in medals_df.columns:
         medals_df = medals_df[medals_df[sport_col].isin(filters['sports'])]
-        
-# --- Gender filter ---
-# Map M/F to Male/Female in medals_df
-gender_map = {'M': 'Male', 'W': 'Female'}
-if 'gender' in medals_df.columns:
-    medals_df['gender'] = medals_df['gender'].map(gender_map)
+    # Filter athletes by disciplines (contains check because it's a string list)
+    if 'disciplines' in athletes_df.columns:
+        # Create a filter pattern for the sports
+        sport_pattern = '|'.join(filters['sports'])
+        athletes_df = athletes_df[athletes_df['disciplines'].str.contains(sport_pattern, na=False, case=False)]
 
-# Filter both athletes_df and medals_df
-if filters['genders']:
-    if 'gender' in athletes_df.columns:
-        athletes_df = athletes_df[athletes_df['gender'].isin(filters['genders'])]
-    if 'gender' in medals_df.columns:
-        medals_df = medals_df[medals_df['gender'].isin(filters['genders'])]
 if filters['continents']:
     if 'continent' in medals_total_df.columns:
         medals_total_df = medals_total_df[medals_total_df['continent'].isin(filters['continents'])]
+    if 'continent' in medals_df.columns:
+        medals_df = medals_df[medals_df['continent'].isin(filters['continents'])]
+    if 'continent' in athletes_df.columns:
+        athletes_df = athletes_df[athletes_df['continent'].isin(filters['continents'])]
+
+# Gender filter (filter returns 'Male'/'Female', filter on gender_display)
+if filters.get('genders'):
+    if 'gender_display' in medals_df.columns:
+        medals_df = medals_df[medals_df['gender_display'].isin(filters['genders'])]
 
 if filters['medals']:
     if medal_col in medals_df.columns:
@@ -213,18 +222,17 @@ with col_left:
 with col_right:
     st.subheader("🏆 Top 10 Countries by Total Medals")
     
-    if len(medals_total_df) > 0:
-        # Get top 10 countries by total medal count
-        if 'Total' in medals_total_df.columns:
-            top_countries = medals_total_df.nlargest(10, 'Total')
-            country_col_display = 'country' if 'country' in top_countries.columns else 'country_code'
-        else:
-            # Calculate total if column doesn't exist
-            medals_total_df['Total'] = medals_total_df.get('Gold', 0) + medals_total_df.get('Silver', 0) + medals_total_df.get('Bronze', 0)
-            top_countries = medals_total_df.nlargest(10, 'Total')
-            country_col_display = 'country' if 'country' in top_countries.columns else 'country_code'
+    if len(medals_df) > 0:
+        # Calculate from filtered medals_df (includes ALL filters)
+        country_medal_data = medals_df.groupby(['country', 'country_code']).size().reset_index(name='Total')
+        
+        # Get top 10 countries
+        top_countries = country_medal_data.nlargest(10, 'Total')
         
         if len(top_countries) > 0:
+            # Use country if available, otherwise country_code
+            country_col_display = 'country' if 'country' in top_countries.columns else 'country_code'
+            
             # Create horizontal bar chart
             fig_bar = px.bar(
                 top_countries,
@@ -255,7 +263,7 @@ with col_right:
         else:
             st.warning("No countries found with current filters")
     else:
-        st.warning("No medal total data available with current filters")
+        st.warning("No medal data available with current filters")
 
 # ============= ADDITIONAL INSIGHTS =============
 st.markdown("---")
@@ -264,23 +272,20 @@ st.header("📈 Quick Insights")
 insight_col1, insight_col2, insight_col3 = st.columns(3)
 
 with insight_col1:
-    try:
-        if len(top_countries) > 0:
-            country_name = top_countries.iloc[0].get('country', top_countries.iloc[0].get('country_code', 'N/A'))
-            total = top_countries.iloc[0]['Total']
-            st.info(f"""
-        **🌟 Most Medals Won**
-        
-        {country_name} leads with {total} total medals!
-        """)
-        else:
-            st.info("""
-        **🌟 Most Medals Won**
-        
-        No data available with current filters
-        """)
-    except:
-        st.warning("No medal data available with current filters")
+    if len(top_countries) > 0:
+        country_name = top_countries.iloc[0].get('country', top_countries.iloc[0].get('country_code', 'N/A'))
+        total = top_countries.iloc[0]['Total']
+        st.info(f"""
+    **🌟 Most Medals Won**
+    
+    {country_name} leads with {total} total medals!
+    """)
+    else:
+        st.info("""
+    **🌟 Most Medals Won**
+    
+    No data available with current filters
+    """)
 
 with insight_col2:
     if 'Gold' in medals_total_df.columns and len(medals_total_df) > 0:
