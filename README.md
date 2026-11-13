@@ -1,8 +1,8 @@
 # Paris 2024 Olympics dashboard
 
-A four-page Streamlit dashboard over the Paris 2024 Olympic Games dataset. It turns the raw
-CSV exports into four views: the medal table, the geography, the athletes, and the sports
-and venues.
+Aini Ines and I built this four-page Streamlit dashboard over the Paris 2024 Olympic Games
+dataset. It turns the raw CSV exports into four views: the medal table, the geography, the
+athletes, and the sports and venues.
 
 ## Pages
 
@@ -15,11 +15,11 @@ and venues.
 
 ## Filters
 
-Four global controls sit above every page: country, sport, medal type and continent. They
-are applied to the medal, athlete and country frames before any chart is drawn, so the
+Four global controls sit above every page: country, sport, medal type and continent. We
+apply them to the medal, athlete and country frames before any chart is drawn, so the
 headline numbers and the charts always agree.
 
-The continent control is the one addition beyond the assignment. Countries are mapped to
+The continent control is the one addition beyond the assignment. We map countries to
 continents with `pycountry`, which keeps the physical-country list small enough to filter on
 without a hand-written table.
 
@@ -61,7 +61,7 @@ for venue coordinates.
 ## Team and context
 
 Course project for Software Engineering for Data Science at ESI-SBA (2025/2026), taught by
-Dr. Belkacem Khaldi. Built by Medjahri Mohammed Safouane and Aini Ines.
+Dr. Belkacem Khaldi. Aini Ines and I built it.
 
 ## Notes
 
@@ -69,3 +69,5 @@ Dr. Belkacem Khaldi. Built by Medjahri Mohammed Safouane and Aini Ines.
   re-read the CSVs.
 - The dashboard is read-only. There is no backend and no database; the CSVs are the source
   of truth.
+
+More of my work: https://safouane-medjahri.vercel.app
